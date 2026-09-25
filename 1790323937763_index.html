@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Sentiment Analytics Workbench</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-base: #0f172a;
+      --bg-surface: #1e293b;
+      --bg-surface-elevated: #334155;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #475569;
+      --pos-color: #22c55e;
+      --neu-color: #eab308;
+      --neg-color: #ef4444;
+      --twitter-color: #1da1f2;
+      --reddit-color: #ff4500;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    .dashboard {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+    }
+
+    .panel {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    h1, h2, h3 {
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .header-title {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Controls Panel */
+    .control-group {
+      margin-bottom: 20px;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .input-field, .select-field, textarea {
+      width: 100%;
+      background-color: var(--bg-base);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .input-field:focus, .select-field:focus, textarea:focus {
+      border-color: var(--primary);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .btn {
+      width: 100%;
+      background-color: var(--primary);
+      color: #000;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background-color: var(--primary-hover);
+      color: #fff;
+    }
+
+    /* Main Grid Visualizations */
+    .main-content {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .metrics-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .metric-card {
+      background-color: var(--bg-surface-elevated);
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid var(--primary);
+    }
+
+    .metric-card.pos { border-left-color: var(--pos-color); }
+    .metric-card.neu { border-left-color: var(--neu-color); }
+    .metric-card.neg { border-left-color: var(--neg-color); }
+
+    .metric-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .metric-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .chart-card {
+      min-height: 300px;
+    }
+
+    .feed-card {
+      grid-column: 1 / -1;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* Feed Items */
+    .data-item {
+      background-color: var(--bg-base);
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .platform-tag {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .tag-twitter { background-color: var(--twitter-color); color: #fff; }
+    .tag-reddit { background-color: var(--reddit-color); color: #fff; }
+
+    .sentiment-badge {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .badge-positive { background-color: rgba(34, 197, 94, 0.2); color: var(--pos-color); }
+    .badge-neutral { background-color: rgba(234, 179, 8, 0.2); color: var(--neu-color); }
+    .badge-negative { background-color: rgba(239, 68, 68, 0.2); color: var(--neg-color); }
+
+    /* Utilities */
+    .loader {
+      display: none;
+      text-align: center;
+      margin: 10px 0;
+      font-size: 0.85rem;
+      color: var(--primary);
+    }
+
+    @media (max-width: 1024px) {
+      .dashboard { grid-template-columns: 1fr; }
+      .main-content { grid-template-columns: 1fr; }
+      .metrics-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  
+  <div class="header-title">
+    <h1>Social Analytics Engine</h1>
+    <span style="font-size: 0.85rem; color: var(--text-muted)">Real-time Sentiment Pipeline v2.4</span>
+  </div>
+
+  <!-- Sidebar Controls -->
+  <aside class="panel">
+    <h3>Data Ingestion</h3>
+    <br>
+    
+    <div class="control-group">
+      <label>Platform Target</label>
+      <select id="platformSelect" class="select-field">
+        <option value="all">All Sources (Twitter & Reddit)</option>
+        <option value="twitter">Twitter API (X)</option>
+        <option value="reddit">Reddit API</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Tracking Hashtag / Subreddit</label>
+      <input type="text" id="queryInput" class="input-field" value="#TechTrends">
+    </div>
+
+    <div class="control-group">
+      <label>Custom Text Analysis</label>
+      <textarea id="customTextInput" placeholder="Paste custom social post or payload JSON..."></textarea>
+    </div>
+
+    <button class="btn" id="analyzeBtn" onclick="runPipeline()">Execute NLP Pipeline</button>
+    <div class="loader" id="loader">Processing VADER/BERT Pipeline...</div>
+  </aside>
+
+  <!-- Main Analytics Display -->
+  <main class="main-content">
+
+    <!-- Aggregated Metrics Row -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label">Analyzed Items</div>
+        <div class="metric-value" id="totalCount">0</div>
+      </div>
+      <div class="metric-card pos">
+        <div class="metric-label">Positive Sentiment</div>
+        <div class="metric-value" id="posCount">0%</div>
+      </div>
+      <div class="metric-card neu">
+        <div class="metric-label">Neutral Sentiment</div>
+        <div class="metric-value" id="neuCount">0%</div>
+      </div>
+      <div class="metric-card neg">
+        <div class="metric-label">Negative Sentiment</div>
+        <div class="metric-value" id="negCount">0%</div>
+      </div>
+    </div>
+
+    <!-- Chart 1: Distribution -->
+    <div class="panel chart-card">
+      <h3>Sentiment Classification Ratio</h3>
+      <canvas id="doughnutChart"></canvas>
+    </div>
+
+    <!-- Chart 2: Timeline -->
+    <div class="panel chart-card">
+      <h3>Temporal Compound Score (-1 to +1)</h3>
+      <canvas id="lineChart"></canvas>
+    </div>
+
+    <!-- Live Stream / Extracted Feed -->
+    <div class="panel feed-card">
+      <h3>Ingested Posts & Local Inferred Polarity</h3>
+      <br>
+      <div id="feedStream"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Lexicon-based NLP Heuristic Engine (Simulated VADER-like local classifier)
+  const lexicon = {
+    positive: ['great', 'awesome', 'love', 'fantastic', 'excellent', 'bullish', 'breakthrough', 'good', 'fast', 'best'],
+    negative: ['terrible', 'worst', 'bad', 'bug', 'slow', 'crash', 'bearish', 'fail', 'hate', 'disappointed']
+  };
+
+  function analyzeSentimentText(text) {
+    const tokens = text.toLowerCase().match(/\w+/g) || [];
+    let score = 0;
+    
+    tokens.forEach(token => {
+      if (lexicon.positive.includes(token)) score += 1;
+      if (lexicon.negative.includes(token)) score -= 1;
+    });
+
+    const normalized = tokens.length > 0 ? score / Math.sqrt(tokens.length + 1) : 0;
+    
+    let classification = 'Neutral';
+    if (normalized > 0.15) classification = 'Positive';
+    if (normalized < -0.15) classification = 'Negative';
+
+    return {
+      score: parseFloat(normalized.toFixed(2)),
+      classification: classification
+    };
+  }
+
+  // Mock Data Streams
+  const mockDataset = [
+    { platform: 'twitter', text: 'The new product performance update is awesome! Lightning fast.', time: '10:00 AM' },
+    { platform: 'reddit', text: 'Experiencing a major bug in the API. It is terrible and crashes constantly.', time: '10:02 AM' },
+    { platform: 'twitter', text: 'Neutral thoughts on the latest announcement. We will see.', time: '10:05 AM' },
+    { platform: 'reddit', text: 'I love the new UI features. Fantastic improvement overall!', time: '10:08 AM' },
+    { platform: 'twitter', text: 'Worst customer support experience I have had this year.', time: '10:12 AM' }
+  ];
+
+  // Chart Instances
+  let doughnutChartInstance = null;
+  let lineChartInstance = null;
+
+  function initCharts() {
+    const ctxDoughnut = document.getElementById('doughnutChart').getContext('2d');
+    doughnutChartInstance = new Chart(ctxDoughnut, {
+      type: 'doughnut',
+      data: {
+        labels: ['Positive', 'Neutral', 'Negative'],
+        datasets: [{
+          data: [0, 0, 0],
+          backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+          borderWidth: 0
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#f8fafc' } } } }
+    });
+
+    const ctxLine = document.getElementById('lineChart').getContext('2d');
+    lineChartInstance = new Chart(ctxLine, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Compound Valence Score',
+          data: [],
+          borderColor: '#38bdf8',
+          tension: 0.3,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+          y: { min: -1, max: 1, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+        },
+        plugins: { legend: { labels: { color: '#f8fafc' } } }
+      }
+    });
+  }
+
+  function runPipeline() {
+    const loader = document.getElementById('loader');
+    const customText = document.getElementById('customTextInput').value.trim();
+    const platformFilter = document.getElementById('platformSelect').value;
+
+    loader.style.display = 'block';
+
+    setTimeout(() => {
+      let itemsToProcess = [...mockDataset];
+
+      if (customText) {
+        itemsToProcess.unshift({ platform: 'twitter', text: customText, time: 'Just now' });
+      }
+
+      if (platformFilter !== 'all') {
+        itemsToProcess = itemsToProcess.filter(i => i.platform === platformFilter);
+      }
+
+      let pos = 0, neu = 0, neg = 0;
+      const feedContainer = document.getElementById('feedStream');
+      feedContainer.innerHTML = '';
+
+      const timeLabels = [];
+      const scoreTrend = [];
+
+      itemsToProcess.forEach((item) => {
+        const result = analyzeSentimentText(item.text);
+        
+        if (result.classification === 'Positive') pos++;
+        else if (result.classification === 'Neutral') neu++;
+        else neg++;
+
+        timeLabels.push(item.time);
+        scoreTrend.push(result.score);
+
+        // Render Feed Elements
+        const badgeClass = `badge-${result.classification.toLowerCase()}`;
+        const tagClass = `tag-${item.platform}`;
+        
+        const cardNode = document.createElement('div');
+        cardNode.className = 'data-item';
+        cardNode.innerHTML = `
+          <div>
+            <span class="platform-tag ${tagClass}">${item.platform.toUpperCase()}</span>
+            <span>${item.text}</span>
+          </div>
+          <span class="sentiment-badge ${badgeClass}">${result.classification} (${result.score})</span>
+        `;
+        feedContainer.appendChild(cardNode);
+      });
+
+      // Update Aggregates
+      const total = itemsToProcess.length;
+      document.getElementById('totalCount').textContent = total;
+      document.getElementById('posCount').textContent = total ? `${Math.round((pos/total)*100)}%` : '0%';
+      document.getElementById('neuCount').textContent = total ? `${Math.round((neu/total)*100)}%` : '0%';
+      document.getElementById('negCount').textContent = total ? `${Math.round((neg/total)*100)}%` : '0%';
+
+      // Update Charts
+      doughnutChartInstance.data.datasets[0].data = [pos, neu, neg];
+      doughnutChartInstance.update();
+
+      lineChartInstance.data.labels = timeLabels;
+      lineChartInstance.data.datasets[0].data = scoreTrend;
+      lineChartInstance.update();
+
+      loader.style.display = 'none';
+    }, 600);
+  }
+
+  window.onload = () => {
+    initCharts();
+    runPipeline();
+  };
+</script>
+</body>
+</html>
